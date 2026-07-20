@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A local-first 16:9 slide pressure and fit check from pitch.dog.",
   "license": "AGPL-3.0-or-later",
-  "homepage": "https://github.com/bomkino/pitchdog-slide-check",
+  "homepage": "https://pitchdog-slide-check.dog-pitch.chatgpt.site",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bomkino/pitchdog-slide-check.git"

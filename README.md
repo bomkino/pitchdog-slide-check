@@ -4,6 +4,8 @@
 
 # Slide Check
 
+**[Open the live tool](https://pitchdog-slide-check.dog-pitch.chatgpt.site)**
+
 **One real slide. One honest call.**
 
 Paste the visible words from a 16:9 slide. Slide Check measures the load it can actually measure, renders the page, then recommends **keep one**, **edit**, or **split**. It does not pretend to judge whether your idea is brilliant.
