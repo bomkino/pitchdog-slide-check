@@ -1,6 +1,7 @@
 import "./styles.css";
 import { buildResult } from "./analyse.ts";
 import { measureSlide } from "./measure.ts";
+import { analyseText, estimateReadingTime } from "../engine/one-slide-or-three/index.ts";
 import { ARTEFACTS, CONSTRAINTS, FAMILIARITY, JOBS, LANES, LAYOUTS, MODES, RELATIONS, SETTINGS, TIMES } from "./content.ts";
 import type { AppState, ExpertAnswers, Ride } from "./types.ts";
 import {
@@ -118,7 +119,7 @@ function flowPage(): string {
         <p class="scope-tag">Slide Check · expert mode</p><p class="kicker">${step.kicker}</p>
         <h1 data-page-heading tabindex="-1">${step.question}</h1><p>${step.note}</p>
       </div>
-      <div class="answers-panel"><div class="answers-inner">${choiceGrid(step.choices, step.multiple ? "multi-choice" : "flow-choice", selected, selectedMany)}${step.multiple ? '<button class="primary-action multi-continue" id="multi-continue" type="button">Keep going <span aria-hidden="true">↗</span></button>' : ""}</div></div>
+      <div class="answers-panel"><div class="answers-inner"><p class="answers-instruction">${step.multiple ? "Pick any real constraints. You can leave the lot alone." : "Pick the closest truth. You can go back."}</p>${choiceGrid(step.choices, step.multiple ? "multi-choice" : "flow-choice", selected, selectedMany)}${step.multiple ? '<button class="primary-action multi-continue" id="multi-continue" type="button">Keep going <span aria-hidden="true">↗</span></button>' : ""}</div></div>
     </div>
   </section>`;
 }
@@ -144,10 +145,11 @@ function editorPage(): string {
         <input id="slide-title" value="${escapeHTML(state.draft.title)}" placeholder="For example: Why this, why now">
         <label for="slide-copy">Everything else visible on the slide</label>
         <textarea id="slide-copy" rows="10" placeholder="Paste the body, labels, quote, and source people must read…">${escapeHTML(state.draft.copy)}</textarea>
+        <output class="live-load" aria-label="Current measurable slide load"><span id="live-load">${copyLoadText()}</span><kbd>⌘/Ctrl + Enter</kbd></output>
         <button class="primary-action" id="check-slide" type="button">Check this real page <span aria-hidden="true">↗</span></button>
         <p class="input-truth"><strong>Why paste anything?</strong> Slide Check counts the words and blocks, times the reading load, measures this rendered 16:9 page, and finds existing break points. It does not understand your secret intention or grade the idea.</p>
       </div>
-      <div class="preview-stage" id="preview-stage">${preview(state.draft.title, state.draft.copy)}<p>The preview is real. The judgement stays mechanical and inspectable.</p></div>
+      <div class="preview-stage" id="preview-stage">${preview(state.draft.title, state.draft.copy)}<p>The preview is real. The judgment stays mechanical and inspectable.</p></div>
     </div>
   </section>`;
 }
@@ -167,6 +169,17 @@ function labelFor(choices: readonly Choice[], value?: string): string | undefine
 
 function preview(title: string, copy: string): string {
   return `<div class="slide-preview" aria-label="Real 16 by 9 slide preview"><span>16:9</span>${title ? `<h2>${escapeHTML(title)}</h2>` : ""}<p>${escapeHTML(copy || "Your slide, with room to breathe.")}</p><i aria-hidden="true"></i></div>`;
+}
+
+function copyLoadText(): string {
+  const locale = navigator.language || document.documentElement.lang || "en-US";
+  const metrics = analyseText({ title: state.draft.title || undefined, body: state.draft.copy }, locale);
+  if (!metrics.visibleWordCount) return "Waiting for one real slide.";
+  const reading = estimateReadingTime(metrics.timedWordCount, { tag: locale });
+  const blocks = `${metrics.explicitBlockCount} ${metrics.explicitBlockCount === 1 ? "block" : "blocks"}`;
+  return typeof reading.seconds === "number"
+    ? `${metrics.visibleWordCount} words · ${blocks} · about ${Math.max(1, Math.round(reading.seconds))} sec to read`
+    : `${metrics.visibleWordCount} words · ${blocks} · timing needs a local read`;
 }
 
 function resultPage(): string {
@@ -214,6 +227,9 @@ function setExpert(key: keyof ExpertAnswers, value: string): void {
 }
 
 function bindEvents(): void {
+  document.querySelector(".brand")?.addEventListener("click", (event) => {
+    event.preventDefault(); state.phase = "landing"; state.ride = undefined; state.result = undefined; save(); render();
+  });
   document.querySelectorAll<HTMLButtonElement>("[data-ride]").forEach((button) => button.addEventListener("click", () => {
     state.ride = button.dataset.ride as Ride;
     state.phase = state.ride === "expert" ? "flow" : "editor";
@@ -256,8 +272,9 @@ function bindEvents(): void {
   }));
   const titleInput = document.querySelector<HTMLInputElement>("#slide-title");
   const copyInput = document.querySelector<HTMLTextAreaElement>("#slide-copy");
-  titleInput?.addEventListener("input", () => { state.draft.title = titleInput.value; state.result = undefined; save(); updatePreview(); });
-  copyInput?.addEventListener("input", () => { state.draft.copy = copyInput.value; state.result = undefined; save(); copyInput.removeAttribute("aria-invalid"); document.querySelector("#copy-error")?.remove(); updatePreview(); });
+  titleInput?.addEventListener("input", () => { state.draft.title = titleInput.value; state.result = undefined; save(); updatePreview(); updateCopyLoad(); });
+  copyInput?.addEventListener("input", () => { state.draft.copy = copyInput.value; state.result = undefined; save(); copyInput.removeAttribute("aria-invalid"); document.querySelector("#copy-error")?.remove(); document.querySelector("#measurement-error")?.remove(); updatePreview(); updateCopyLoad(); });
+  copyInput?.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void checkSlide(); } });
   document.querySelector("#check-slide")?.addEventListener("click", () => void checkSlide());
   document.querySelector("#edit-slide")?.addEventListener("click", () => { state.phase = "editor"; state.result = undefined; save(); render(); });
   document.querySelector("#go-expert")?.addEventListener("click", () => { state.ride = "expert"; state.phase = "flow"; state.step = 0; state.result = undefined; state.expert = { constraints: [] }; save(); render(); });
@@ -277,9 +294,16 @@ function updatePreview(): void {
   if (copy) copy.textContent = state.draft.copy.trim() || "Your slide, with room to breathe.";
 }
 
+function updateCopyLoad(): void {
+  const output = document.querySelector<HTMLElement>("#live-load");
+  if (output) output.textContent = copyLoadText();
+}
+
 async function checkSlide(): Promise<void> {
   const copyInput = document.querySelector<HTMLTextAreaElement>("#slide-copy");
   const copy = copyInput?.value.trim() ?? state.draft.copy.trim();
+  document.querySelector("#copy-error")?.remove();
+  document.querySelector("#measurement-error")?.remove();
   if (!copy) {
     copyInput?.setAttribute("aria-invalid", "true");
     const error = document.createElement("p");
@@ -289,14 +313,18 @@ async function checkSlide(): Promise<void> {
   state.draft.copy = copy;
   state.draft.title = document.querySelector<HTMLInputElement>("#slide-title")?.value.trim() ?? state.draft.title.trim();
   const button = document.querySelector<HTMLButtonElement>("#check-slide");
-  if (button) { button.disabled = true; button.textContent = "Measuring the real page…"; }
+  if (button) { button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = "Measuring the real page…"; }
   try {
     const measurement = await measureSlide(state.draft.title, state.draft.copy);
     state.result = buildResult(state, measurement);
     state.phase = "result";
     save(); render(); announce(state.result.headline);
   } catch {
-    if (button) { button.disabled = false; button.innerHTML = 'Try the check again <span aria-hidden="true">↗</span>'; }
+    if (button) {
+      button.disabled = false; button.removeAttribute("aria-busy"); button.innerHTML = 'Try the check again <span aria-hidden="true">↗</span>';
+      const error = document.createElement("p"); error.id = "measurement-error"; error.className = "input-error"; error.setAttribute("role", "alert"); error.textContent = "The preview missed its cue. Your copy is safe—try once more.";
+      button.insertAdjacentElement("afterend", error);
+    }
     announce("The preview missed its cue. Your copy is safe—try once more.");
   }
 }
@@ -304,7 +332,10 @@ async function checkSlide(): Promise<void> {
 function resultMarkdown(): string {
   const result = state.result;
   if (!result) return "# Slide Check\n\nNo result yet.\n";
-  return `# ${result.headline}\n\n${result.body}\n\n## The page in numbers\n\n- Words: ${result.raw.metrics.visibleWordCount}\n- Text blocks: ${result.raw.metrics.explicitBlockCount}\n- Reading: ${typeof result.raw.readingTime.seconds === "number" ? `${Math.max(1, Math.round(result.raw.readingTime.seconds))} seconds` : "Context needed"}\n- Physical fit: ${humanFit(result.raw.checks.physicalFit)}\n\n## What the tool did not judge\n\nTruth, taste, originality, persuasion, and whether the idea has soul.\n`;
+  const context = result.context.length ? `\n\n## What the expert context changed\n\n${result.context.map((item) => `- ${item}`).join("\n")}` : "";
+  const craft = result.craft.length ? `\n\n## Transparent craft check\n\n${result.craft.map((item) => `- **${item.label}:** ${item.detail}`).join("\n")}` : "";
+  const checkedSlide = `## Checked slide\n\n${state.draft.title ? `**Title:** ${state.draft.title}\n\n` : ""}${state.draft.copy}`;
+  return `# ${result.headline}\n\n${result.body}\n\n${checkedSlide}\n\n## The page in numbers\n\n- Words: ${result.raw.metrics.visibleWordCount}\n- Text blocks: ${result.raw.metrics.explicitBlockCount}\n- Reading: ${typeof result.raw.readingTime.seconds === "number" ? `${Math.max(1, Math.round(result.raw.readingTime.seconds))} seconds` : "Context needed"}\n- Physical fit: ${humanFit(result.raw.checks.physicalFit)}${context}${craft}\n\n## Assumptions and limits\n\n${result.raw.limitations.map((item) => `- ${item}`).join("\n")}\n\n## What the tool did not judge\n\nTruth, taste, originality, persuasion, and whether the idea has soul.\n\nGenerated locally by Slide Check from pitch.dog.\n`;
 }
 
 initialiseThreadCursor();

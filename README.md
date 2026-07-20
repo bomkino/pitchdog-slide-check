@@ -10,6 +10,8 @@
 
 Paste the visible words from a 16:9 slide. Slide Check measures the load it can actually measure, renders the page, then recommends **keep one**, **edit**, or **split**. It does not pretend to judge whether your idea is brilliant.
 
+The editor shows the measurable load as you work, supports Command/Control + Enter, and downloads the checked copy with the reasoning and limits—not a context-free verdict.
+
 [![Verify](https://github.com/bomkino/pitchdog-slide-check/actions/workflows/ci.yml/badge.svg)](https://github.com/bomkino/pitchdog-slide-check/actions/workflows/ci.yml)
 
 <p align="center">

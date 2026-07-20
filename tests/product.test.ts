@@ -48,3 +48,20 @@ test("the interface explains why copy is required", () => {
   assert.match(source, /counts the words and blocks/i);
   assert.doesNotMatch(source, /Keep this answer|Clear this case|Are you in danger|shared device/i);
 });
+
+test("the editor shows live measurable load and fails visibly without duplicate errors", () => {
+  const source = readFileSync("src/main.ts", "utf8");
+  assert.match(source, /Current measurable slide load/);
+  assert.match(source, /analyseText/);
+  assert.match(source, /event\.metaKey \|\| event\.ctrlKey/);
+  assert.match(source, /document\.querySelector\("#copy-error"\)\?\.remove\(\);[\s\S]*if \(!copy\)/);
+  assert.match(source, /measurement-error/);
+});
+
+test("theme labels and the product home route remain truthful after state changes", () => {
+  const ui = readFileSync("src/ui.ts", "utf8");
+  const source = readFileSync("src/main.ts", "utf8");
+  assert.match(ui, /setAttribute\("aria-label"/);
+  assert.match(ui, /Switch to/);
+  assert.match(source, /querySelector\("\.brand"\)[\s\S]*state\.phase = "landing"/);
+});

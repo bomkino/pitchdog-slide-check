@@ -15,9 +15,11 @@ Help someone decide whether the visible copy on one real slide can remain one pa
 
 - one primary verdict: keep one, edit, or split;
 - measured copy and block counts;
+- a quiet live copy-load readout before submission;
 - a real 16:9 preview and physical-fit status;
 - plain reasons, limits, and next moves;
-- suggested split boundaries only where a mechanical boundary exists.
+- suggested split boundaries only where a mechanical boundary exists;
+- an explicit local download containing the checked copy, context, observations, and limits.
 
 ## Boundaries
 
